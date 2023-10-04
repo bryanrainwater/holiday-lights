@@ -11,12 +11,28 @@ import json
 import random
 import numpy as np
 import sys
+import math
+#import sd_notify
+import sdnotify
+#from systemd.daemon import notify
+
+
+# Watchdog timer
+#notify = sd_notify.Notifier()
+notify = sdnotify.SystemdNotifier()
+#if not notify.enabled():
+#    raise Exception("Watchdog not enabled")
+#notify.ready()
 
 
 sunsetCheck = True
-    
+
+# In minutes
+#   Can be used to account for mountains and whatnot
+sunsetShift = -60#-300
+
 PIN = board.D18
-NUM_PIXELS=400#300#200
+NUM_PIXELS=500#400#300#200
 ORDER = neopixel.RGB
     
 max_bright = 255
@@ -41,7 +57,6 @@ rando = (255,255,0)
 # Personal API key python file config.py
 #   of form api_key = "bleh"
 import config
-
 def get_ip():
     response = requests.get('https://api64.ipify.org?format=json').json()
     return response['ip']
@@ -54,6 +69,9 @@ def get_location():
 def get_sunset(loc):
     city = astral.LocationInfo(loc.get("city"),loc.get("region"),loc.get("timezone"),loc.get("latitude"), loc.get("longitude"))
     sunset = sun(city.observer, date=datetime.date.today(), tzinfo=loc.get("timezone"))["sunset"]
+    
+    sunset = sunset + datetime.timedelta(minutes = sunsetShift )
+
     return sunset
 
 def get_timenow(loc):
@@ -160,6 +178,7 @@ def set_pattern( event ):
 # Begin crude code
 if __name__ == "__main__":
 
+    notify.notify("READY=1")
 
     # Only do this once at beginning of code
     loc = get_location()
@@ -173,7 +192,7 @@ if __name__ == "__main__":
     pixels = neopixel.NeoPixel( PIN, NUM_PIXELS, auto_write = False, pixel_order = ORDER)
     
     #iterator = 0
-    num_rainbows = 8# 4#3
+    num_rainbows = 16# 4#3
     skip = 0#100
     pattern = None
     
@@ -192,13 +211,18 @@ if __name__ == "__main__":
     
     #patternType = "static"#"rolling"
     patternType = "rolling"
-    uniqueColors = [orange,orange,purple]#,blue]
+    uniqueColors = [orange,purple]#,blue]
     #uniqueColors = [white,yellow]#,blue]
     #uniqueColors = [blue, red, green]#white]#, green]#,blue]
     #uniqueColors = [rando,rando]#,blue]
     numUniqueColors = len(uniqueColors)
     updateDelay = 1#0.2
-    
+
+    notify.notify("WATCHDOG=1")
+    notify.notify("STATUS=Watchdog kicked at {}".format(get_timenow(loc)))
+    oldWatchDogCheck = time.time()
+    watchDogInterval = 5
+
     while True:
         # Only ocassionally update current time and sunset time...
         #if time.time() > oldTimeCheck + timeCheckInterval:
@@ -207,13 +231,23 @@ if __name__ == "__main__":
         #    now = get_timenow(loc)
         #    if datetime.datetime.now().date() > sunset.date():
         #        sunset = get_sunset(loc)
-    
+   
+        # Enable heartbeat for systemctl
+
         if time.time() > oldWxCheck + wxCheckInterval:
             print("Updating weather data")
             wx, wxdesc = get_weather(loc)
             oldWxCheck = time.time()
             print("Weather is ", wxdesc)
-    
+   
+        if time.time() > oldWatchDogCheck + watchDogInterval:
+            #print("Kicking WATCHDOG")
+            #notify.status("WATCHDOG=1")
+            #notify.notify("STATUS=Watchdog kicked at {}".format(time.time()) )
+            notify.notify("WATCHDOG=1")
+            notify.notify("STATUS=Watchdog kicked at {}".format(get_timenow(loc)))
+            #notify("WATCHDOG=1")
+            oldWatchDogCheck = time.time()
        
         if( sunset.date() < get_timenow(loc).date() or pattern is None):
             print("Moved onto new day, recalculating sunset time")
@@ -316,42 +350,119 @@ if __name__ == "__main__":
 
             # break this into strips.....
             #   Each row is a new strip, with columns
-            #       [#LEDs, strt, angle, end ]
-            #   Noting that start and end are in LED counts
+            #       [#LEDs, angle, strt_x, end_x, start_y, end_y ]
+            ##   Noting that start and end are in LED counts
+            # ANGLE is ALWAYS referenced to start pixel in strip
 
             strips = [ 
-                    [ 90,    0,  180,   -90 ],
-                    [ 15,  -90,   90,  None ],
-                    [ 30,  -90,  180,  None ],
-                    [ 90, None,   45,   -90 ],
+                    [ 90,  180,    0,  -90, None, None ],
+                    [ 15,   90,  -90, None, None, None ],
+                    [ 30,  180,  -90, None, None, None ],
+                    [ 90,   45, None,  -90, None, None ],
                     ]
 
             # Once I have all my strips loaded, need to fill in None values
             #   by calculating the end start or end positions based on angles
 
-            for strip in strips:
-                if strip[1] == None:
+            for i, strip in enumerate(strips):
+                if strip[2] == None:
                     # This means start position needs to be calculated
-                    strip[1] = np.cos(strip[2]) * strip[0]
+                    strips[i][2] = strip[3] - np.cos(strip[1]) * strip[0]
                 if strip[3] == None:
-                    strip[3] = np.cos(strip[1]) * strip[0]
+                    strips[i][3] = strip[2] + np.cos(strip[1]) * strip[0]
+
+                if strip[4] == None and strip[5] == None:
+                    # This means we don't care about vertical positions
+                    strips[i][4] = 0
+                    strips[i][5] = 0
+                if strip[4] == None:
+                    strips[i][4] = strip[5] - np.sin(strip[1]) * strip[0]
+                if strip[5] == None:
+                    strips[i][5] = strip[4] + np.sin(strip[1]) * strip[0]
 
             #   Next, figure out arrange according to patterns
-
+            #
             #   For example, rainbow I will want an option to have everything going
             #       smoothly from left to right.
+            #
+            #   To do this, I will need to put everything into a pixel matrix
 
-            #   To do this, I will need to put everything into a horizontal matrix
-            #       
+            pixelGrid = []
+            for strip in strips:
+                #pixelGrid.append([ x, y ])
+                
+                #For each strip, we start at start pos, (which in my case is 0,0)
+                #   and interpolate across, start_x/y, to end_x/y
 
+                # There ***should*** not be segments that are not straight lines
+                #   if there are, this is edge case, not programming it for now =(
+
+                for i in range(strip[0]):
+                    pixelGrid.append( [ strip[2] + i*strip[3]/strip[0],
+                        strip[4] + i*strip[5]/strip[0] ] )
+
+                # I should now have full cartesian grid of pixels
+
+
+            # Now let's sort them based on x position:
+            pixelGrid = np.array(pixelGrid)
+
+            # First create a evenly distributed grid from max to min
+
+            
+            # Some pattern examples,
+            #   Maybe I want lights to radiate away/towards peaks
+            #       I would need to define radiation point (pick the highest peak?)
+            #       if no Y data, should calculate center x value
+
+            #if( max(pixelGrid(1,:]) != min(pixelGrid(1,:])) ):
+            #if( max(pixelGrid[1,:]) == min(pixelGrid(1,:])) ):
+                # This means no y data present
+
+            # Check max of y data, if equal to min of y data, use min_x + (max_x - min_x)/2
+            #   if does have y data from last check, find x value at highest point
+
+            
+            # Another pattern example:
+            #   Everything moves in the same direction
+
+            
+            # If numFade = 0, hard changes, otherwise add blending
+            numFade = 5
+
+            newColorsWithFade = []
+            for i in range(numUniqueColors):#-1):
+                #if uniqueColors[i] == uniqueColors[i+1]:
+                if uniqueColors[i] == uniqueColors[i-1]:
+                    #newColorsWithFade.append(uniqueColors[i])
+                    newColorsWithFade.append(uniqueColors[i-1])
+                else:
+                    #print(uniqueColors[i], uniqueColors[i+1])
+                    colorStep = tuple(int(color/numFade) for color in uniqueColors[i-1])
+                    for j in range(numFade):
+                        newColorsWithFade.append(
+                                tuple(max(0,int(color - j*step)) for color,step in zip(uniqueColors[i-1],colorStep)))
+                    newColorsWithFade.append((0,0,0))
+                    colorStep = tuple(int(color/numFade) for color in uniqueColors[i])
+                    for j in range(numFade,0,-1):
+                        newColorsWithFade.append(
+                                tuple(max(0,int(color - j*step)) for color,step in zip(uniqueColors[i],colorStep)))
+            #newColorsWithFade.append(uniqueColors[-1])
+
+            uniqueColors = newColorsWithFade
+            numUniqueColors = len(uniqueColors)
+            #print(len(uniqueColors))
 
             event = 'october'
             #event = 'pride'#'october'
             if event == 'october':
-                for i in range(int(skip/numUniqueColors), int(NUM_PIXELS/numUniqueColors)):
+
+                for i in range(math.floor(skip/numUniqueColors), math.ceil(NUM_PIXELS/numUniqueColors)):
                     for j, color in enumerate(uniqueColors):
-                        pixels[i*numUniqueColors+j] = color
+                        if (i*numUniqueColors + j) < NUM_PIXELS:
+                            pixels[i*numUniqueColors+j] = color
                     updateDelay = 1
+                    updateDelay = updateDelay / (2*numFade)
             if event == "pride":
                 for i in range(skip,NUM_PIXELS):
                     val = i/(NUM_PIXELS/num_rainbows)
@@ -364,10 +475,10 @@ if __name__ == "__main__":
                     pixels[i] = int(255*r), int(255*g), int(255*b)
                 updateDelay = 0.05
         
-        print("Pattern set to ",event)
+            print("Pattern set to ",event)
     
-        wx['t'][0] = 0# 1
-        wx['t'][1] = 0# 1
+        wx['t'][0] =  0#1
+        wx['t'][1] =  0#1
     
         # Checking over weather conditions to define style
         if wx['t'][0] > 0 and time.time() > nextFlash:
@@ -375,9 +486,9 @@ if __name__ == "__main__":
             #   Check intensity and flash accordingly
             intensity = wx['t'][1]
             # now define wait until next update of flashing
-            flashDelay = int(random.random()*2 + 0.2)
+            flashDelay = int(random.random()*1.5 + 0.1)
             # size of flash, scale is max length, offset is minimum
-            sizeOfFlash = int(random.random()*40 + 5)
+            sizeOfFlash = int(random.random()*50 + 30)
             # starting index
             flashStart = int(random.random()*(NUM_PIXELS-skip)) + skip
     
@@ -408,7 +519,10 @@ if __name__ == "__main__":
         # Final check to see if before sunset
         #   if before sunset, calculate wait until sunset and wait
         #   if after sunset, wait until date rolls over.
+        #print(sunset, sunset + datetime.timedelta(minutes = -50 ) )
         if( sunsetCheck and sunset > get_timenow(loc) ) :
+            
+            secondsUntilSunset = (sunset - get_timenow(loc)).seconds
             print("Beginning wait. Number of seconds until sunset: ", (sunset - get_timenow(loc)).seconds)
             # Turning off pixels
             for i in range(NUM_PIXELS):
@@ -418,10 +532,19 @@ if __name__ == "__main__":
             #   I could wait until sunset, butttt, nice to
             #   see code is still churning in systemctl
             #updateDelay = (sunset - get_timenow(loc)).seconds
-            updateDelay = 900
+            #if 900 > secondsUntilSunset: 
+            #    updateDelay = secondsUntilSunset
+            #else:
+            #    updateDelay = 900
+            #sys.stdout.flush()
+            updateDelay = 5
+            #time.sleep(5)#0.05)
+            
+            if ( sunset < get_timenow(loc) ):
+                # Set pattern to None to encourage recheck of pattern
+                pattern = None
+
 
         pixels.show()
         sys.stdout.flush()
         time.sleep(updateDelay)#0.05)
-        #iterator+=1
-        #if iterator > NUM_PIXELS: iterator = 0

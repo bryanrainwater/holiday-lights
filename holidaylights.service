@@ -4,9 +4,12 @@ After = network.target
 StartLimitIntervalSec=0
 
 [Service]
-Type=simple
-Restart=always
-RestartSec=10
+#Type=simple
+Type=notify
+Restart=on-watchdog
+WatchdogSec=15s
+#Restart=always
+#RestartSec=10
 User=root
 ExecStart=/usr/bin/python3 /home/rainwater/holiday-lights/holidaylights.py
 
