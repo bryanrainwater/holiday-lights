@@ -12,24 +12,17 @@ import random
 import numpy as np
 import sys
 import math
-#import sd_notify
 import sdnotify
-#from systemd.daemon import notify
-
 
 # Watchdog timer
-#notify = sd_notify.Notifier()
 notify = sdnotify.SystemdNotifier()
-#if not notify.enabled():
-#    raise Exception("Watchdog not enabled")
-#notify.ready()
 
 
 sunsetCheck = True
 
 # In minutes
 #   Can be used to account for mountains and whatnot
-sunsetShift = -60#-300
+sunsetShift = -51#-300
 
 PIN = board.D18
 NUM_PIXELS=500#400#300#200
@@ -47,12 +40,12 @@ orange = (255, 20, 0)
 yellow = (255, 90, 0)
 purple = (255, 0, 100)
 white = (255,255,255)#, 0, 100)
-    
+cw = (255,255,255)#, 0, 100)
+#ww = (255,255,80)
+ww = (255, 90, 0)
+
+
 rando = (255,255,0)
-#orange = (255,255,255)
-#purple = (255,255,255)
-
-
 
 # Personal API key python file config.py
 #   of form api_key = "bleh"
@@ -81,10 +74,14 @@ def get_weather(loc):
     lat = loc.get("latitude")
     lon = loc.get("longitude")
     url = "https://api.openweathermap.org/data/2.5/weather?lat=%s&lon=%s&appid=%s&units=metric" % (lat, lon, config.api_key)
-    
-    response = requests.get(url)
-    data = json.loads(response.text)
-    
+   
+
+    try:
+        response = requests.get(url)
+        data = json.loads(response.text)
+    except:
+        return None, None
+
     weather = data["weather"]
     wind = data['wind']
     clouds = data['clouds']
@@ -204,6 +201,7 @@ if __name__ == "__main__":
     
     oldWxCheck = time.time()
     wx, wxdesc = get_weather(loc)
+    
     print("Weather is ", wxdesc)
     wxCheckInterval = 86400/1000 # Get 1000 requests per day for free
     
@@ -211,12 +209,14 @@ if __name__ == "__main__":
     
     #patternType = "static"#"rolling"
     patternType = "rolling"
-    uniqueColors = [orange,purple]#,blue]
+    #uniqueColors = [orange,orange, purple]#,blue]
+    #uniqueColors = [orange,yellow]#,blue]
     #uniqueColors = [white,yellow]#,blue]
-    #uniqueColors = [blue, red, green]#white]#, green]#,blue]
+    #uniqueColors = [blue, red, green, white]#white]#, green]#,blue]
+    uniqueColors = [blue, red, green, ww]#, white]#white]#, green]#,blue]
     #uniqueColors = [rando,rando]#,blue]
     numUniqueColors = len(uniqueColors)
-    updateDelay = 1#0.2
+    updateDelay = 1#1#0.2
 
     notify.notify("WATCHDOG=1")
     notify.notify("STATUS=Watchdog kicked at {}".format(get_timenow(loc)))
@@ -236,8 +236,11 @@ if __name__ == "__main__":
 
         if time.time() > oldWxCheck + wxCheckInterval:
             print("Updating weather data")
-            wx, wxdesc = get_weather(loc)
+            tmp_wx, tmp_wxdesc = get_weather(loc)
             oldWxCheck = time.time()
+            if wxdesc != None:
+                wx = tmp_wx
+                wxdesc = tmp_wxdesc
             print("Weather is ", wxdesc)
    
         if time.time() > oldWatchDogCheck + watchDogInterval:
@@ -428,41 +431,39 @@ if __name__ == "__main__":
 
             
             # If numFade = 0, hard changes, otherwise add blending
-            numFade = 5
+            numFade = 0#5
 
             newColorsWithFade = []
-            for i in range(numUniqueColors):#-1):
-                #if uniqueColors[i] == uniqueColors[i+1]:
-                if uniqueColors[i] == uniqueColors[i-1]:
-                    #newColorsWithFade.append(uniqueColors[i])
-                    newColorsWithFade.append(uniqueColors[i-1])
-                else:
-                    #print(uniqueColors[i], uniqueColors[i+1])
-                    colorStep = tuple(int(color/numFade) for color in uniqueColors[i-1])
-                    for j in range(numFade):
-                        newColorsWithFade.append(
+            if numFade != 0:
+                for i in range(numUniqueColors):#-1):
+                    #if uniqueColors[i] == uniqueColors[i+1]:
+                    if uniqueColors[i] == uniqueColors[i-1]:
+                        #newColorsWithFade.append(uniqueColors[i])
+                        newColorsWithFade.append(uniqueColors[i-1])
+                    else:
+                        #print(uniqueColors[i], uniqueColors[i+1])
+                        colorStep = tuple(int(color/numFade) for color in uniqueColors[i-1])
+                        for j in range(numFade):
+                            newColorsWithFade.append(
                                 tuple(max(0,int(color - j*step)) for color,step in zip(uniqueColors[i-1],colorStep)))
-                    newColorsWithFade.append((0,0,0))
-                    colorStep = tuple(int(color/numFade) for color in uniqueColors[i])
-                    for j in range(numFade,0,-1):
-                        newColorsWithFade.append(
+                        newColorsWithFade.append((0,0,0))
+                        colorStep = tuple(int(color/numFade) for color in uniqueColors[i])
+                        for j in range(numFade,0,-1):
+                            newColorsWithFade.append(
                                 tuple(max(0,int(color - j*step)) for color,step in zip(uniqueColors[i],colorStep)))
-            #newColorsWithFade.append(uniqueColors[-1])
-
-            uniqueColors = newColorsWithFade
-            numUniqueColors = len(uniqueColors)
-            #print(len(uniqueColors))
+                uniqueColors = newColorsWithFade
+                numUniqueColors = len(uniqueColors)
 
             event = 'october'
             #event = 'pride'#'october'
             if event == 'october':
-
                 for i in range(math.floor(skip/numUniqueColors), math.ceil(NUM_PIXELS/numUniqueColors)):
                     for j, color in enumerate(uniqueColors):
                         if (i*numUniqueColors + j) < NUM_PIXELS:
                             pixels[i*numUniqueColors+j] = color
-                    updateDelay = 1
-                    updateDelay = updateDelay / (2*numFade)
+                    updateDelay = 2#1#1.5
+                    if numFade != 0:
+                        updateDelay = updateDelay / (2*numFade)
             if event == "pride":
                 for i in range(skip,NUM_PIXELS):
                     val = i/(NUM_PIXELS/num_rainbows)
@@ -473,22 +474,86 @@ if __name__ == "__main__":
                     if g>=1.0: g = 1
                     if b>=1.0: b = 1
                     pixels[i] = int(255*r), int(255*g), int(255*b)
-                updateDelay = 0.05
+                updateDelay = 0.01#5
         
             print("Pattern set to ",event)
     
-        wx['t'][0] =  0#1
-        wx['t'][1] =  0#1
-    
+        #wx['t'][0] =  0#1
+        #wx['t'][1] =  0#1
+   
+        # Add twinkle effect:
+
+        #if 1==1:
+        # Check duration of wait time to figure out how many twinkles
+        twinkling = False#True#False
+        if twinkling:
+
+            twinkleInterval = 0.05
+            twinkleIntensity = 1.3
+
+            for j in range(int(int(updateDelay/twinkleInterval)/2)):
+                currentPixels = pixels[:]
+                for i in range(0,NUM_PIXELS):
+                    #pixels[i] = int(pixels[i]/1.1)
+                    r,g,b = pixels[i]
+                    pixels[i] = (int(r/twinkleIntensity),int(g/twinkleIntensity),int(b/twinkleIntensity))
+                pixels.show()
+            
+                time.sleep(twinkleInterval)
+
+                for i in range(0,NUM_PIXELS):
+                    pixels[i] = currentPixels[i]
+                pixels.show()
+                time.sleep(twinkleInterval)
+
+        slowTwinkle = True
+        if slowTwinkle:
+
+            twinkleFadeSteps = 30
+            twinkleDivision = 1.08
+
+            twinklesPerInterval = 1
+            #twinkleInterval = 0.05
+            twinkleInterval = updateDelay/(twinkleFadeSteps*2)
+
+            # Find out what the new values need to be to make them integer arithmetic compatible
+            for j in range(twinklesPerInterval):
+                currentPixels = pixels[:]
+
+                for k in range(1,twinkleFadeSteps+1):
+                    for i in range(0,NUM_PIXELS):
+                        #pixels[i] = int(pixels[i]/1.1)
+                        r,g,b = currentPixels[i]
+                        pixels[i] = (int(r/(twinkleDivision**k)),int(g/(twinkleDivision**k)),int(b/(twinkleDivision**k)))
+                    pixels.show()
+            
+                    time.sleep(twinkleInterval)
+
+                for k in range(twinkleFadeSteps,0,-1):
+                    for i in range(0,NUM_PIXELS):
+                        #pixels[i] = int(pixels[i]/1.1)
+                        r,g,b = currentPixels[i]
+                        pixels[i] = (int(r/(twinkleDivision**k)),int(g/(twinkleDivision**k)),int(b/(twinkleDivision**k)))
+                    pixels.show()
+
+                    time.sleep(twinkleInterval)
+
+                for i in range(0,NUM_PIXELS):
+                    pixels[i] = currentPixels[i]
+                pixels.show()
+                time.sleep(twinkleInterval)
+
+
         # Checking over weather conditions to define style
-        if wx['t'][0] > 0 and time.time() > nextFlash:
+        #if wx['t'][0] > 0 and time.time() > nextFlash:
+        if 1==0 and time.time() > nextFlash:
             # This means thunderstorm is occurring
             #   Check intensity and flash accordingly
             intensity = wx['t'][1]
             # now define wait until next update of flashing
-            flashDelay = int(random.random()*1.5 + 0.1)
+            flashDelay = int(random.random()*1.2 + 0.1)
             # size of flash, scale is max length, offset is minimum
-            sizeOfFlash = int(random.random()*50 + 30)
+            sizeOfFlash = int(random.random()*70 + 30)
             # starting index
             flashStart = int(random.random()*(NUM_PIXELS-skip)) + skip
     
@@ -511,10 +576,12 @@ if __name__ == "__main__":
         # This will simply roll by one value everytime
         currentPixels = pixels[:]
         currentPixels = currentPixels[skip:]
-    
-        currentPixels = np.roll(currentPixels,3)
-        for i in range(skip,NUM_PIXELS):
-            pixels[i] = currentPixels[i-skip]
+   
+        static=True
+        if not static:
+            currentPixels = np.roll(currentPixels,3)
+            for i in range(skip,NUM_PIXELS):
+                pixels[i] = currentPixels[i-skip]
         
         # Final check to see if before sunset
         #   if before sunset, calculate wait until sunset and wait
@@ -527,7 +594,7 @@ if __name__ == "__main__":
             # Turning off pixels
             for i in range(NUM_PIXELS):
                 pixels[i] = (0,0,0)
-            pixels.show()
+            #pixels.show()
             # Waiting a few minutes, check again
             #   I could wait until sunset, butttt, nice to
             #   see code is still churning in systemctl
@@ -540,11 +607,14 @@ if __name__ == "__main__":
             updateDelay = 5
             #time.sleep(5)#0.05)
             
-            if ( sunset < get_timenow(loc) ):
+            if ( secondsUntilSunset < 30 ):#sunset < get_timenow(loc) ):
                 # Set pattern to None to encourage recheck of pattern
                 pattern = None
 
 
         pixels.show()
         sys.stdout.flush()
-        time.sleep(updateDelay)#0.05)
+        
+        # If twinkling, remove updateDelay
+        if not twinkling and not slowTwinkle:
+            time.sleep(updateDelay)#0.05)
