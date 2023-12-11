@@ -69,6 +69,10 @@ sunsetShift = -51#-300
 minsPastMidnight = 0
 # UNAPPLIED
 runUntilSunrise = False
+    
+timeCheckInterval = 3
+watchDogInterval = 5
+updateDelay = 1#1#0.2
 
 # LED WS2811 configurations for Raspberry Pi
 PIN = board.D18
@@ -98,6 +102,7 @@ num_rainbows = 16# 4#3
 skip = 0#100
 pattern = None
 patternType = "rolling"
+    
 
 # Personal API key python file config.py
 #   of form api_key = "bleh"
@@ -205,26 +210,252 @@ def get_weather(loc):
     return wx, desc
 
 def get_event(date = None):
-    # Events and effects: See comments at top of code
-    # Basically, if month = 12, event = Dec
+    date = str(date).split('-')
+    year = int(date[0])
+    month = int(date[1])
+    day = int(date[2])
+    
+    if month == 10:
+        if day == 31:
+            event = 'halloween'
+        else:
+            event = 'october'
+    elif month == 11:
+        if day == 11:
+            event = 'veterans' #colors two blues and red in between
+        else:
+            event = 'november'
+    elif month == 12:
+        if day == 24:
+            event = 'december' #'christmaseve'
+        elif day == 25:
+            event = 'december' #'christmas'
+        else:
+            event = 'december'
+    elif month == 1:
+        if day == 1:
+            event = 'newyear'
+    elif month == 2:
+        if day == 14:
+            event = 'valentines'
+        else:
+            event = 'february'
+    elif month == 3:
+        if day == 17:
+            event = 'stpatricksday'
+    elif month == 5:
+        if day == 5:
+            event = 'cincodemayo'
+    elif month == 6:
+        if day == 19:
+            event = 'juneteenth'
+        else:
+            event = 'pridemonth'
+    elif month == 7:
+        if day == 4:
+            event = 'independenceday'
 
-    print("Get event")
 
+    # Need to figure out how to program
+    #   diwali (darkest day of November?
+    #   memorial day last monday of may (do all red)
+    #   labor day (floating monday sep 1-7, red/white/blue)
+    #   
+    
+    return event
 
-def set_pattern( event ):
+def set_pattern( pixels, event ):
     # setting pattern based on event
-    print("Set pattern")
+    numFade == 0
+    
+    if event == 'december':
+        uniqueColors = [blue, red, green, ww]#, white]#white]#, green]#,blue]
+
+    for i in range(math.floor(skip/numUniqueColors), math.ceil(NUM_PIXELS/numUniqueColors)):
+        for j, color in enumerate(uniqueColors):
+            if (i*numUniqueColors + j) < NUM_PIXELS:
+                pixels[i*numUniqueColors+j] = color
+        updateDelay = 2#1#1.5
+        #if numFade != 0:
+        #    updateDelay = updateDelay / (2*numFade)
+    if event == "pride":
+        for i in range(skip,NUM_PIXELS):
+            val = i/(NUM_PIXELS/num_rainbows)
+            while(val > 1.0):
+                val -= 1.0
+            (r, g, b) = colorsys.hsv_to_rgb( val , 1.0, 1.0)
+            if r>=1.0: r = 1
+            if g>=1.0: g = 1
+            if b>=1.0: b = 1
+            pixels[i] = int(255*r), int(255*g), int(255*b)
+        updateDelay = 0.01#5
+    print("Pattern is set")
+
+    return pixels, updateDelay 
 
 
-# Begin crude code
+# Currently unimplemented
+def cartesianBuild( ):
+    # need to come up with scheme for house orientation.
+    #   For example, my house has LEDs of the form:
+    #
+    #                                   ->
+    #                                 ->  ->
+    #                               ->      ->
+    #                             ->          ->
+    #                           ->      <-      ->
+    #                ->->-> V ->      <-  <-    # ->
+    #             ->          |     <-      <- ##  |
+    #           ->            |     |        |     |    
+    #         ->              |     |        |     |
+    #       ->             ____________________________     
+    #     ->               | ======================== |
+    #   ->                 | ======================== |
+    # -> ######### <-<-<-<-^ ======================== |
+    # |            | _____ ^ ======================== |
+    # |            | |   | <-<-<-<-<-<-<-<-<-<-<-<-<-<-
+    # |            | |   | |                          |                         
+    # |            | |   | |                          |
+    # |            | _____ |                          |
+    # |            |_______|                          |
+    # |                    |                          | 
+    # |                    |                          |
+    #
+    #
+    #   Note the direction of arrows, left right is obvious,
+    #   down arrow is towards the front, carrot is into house
+    #   hash tags are led strips connected by general wiring
+    #   equal signs are roofing shingles over garage leading 
+    #   up to next level
+
+    #   Premise of LEDs, each LED needs to know it's directionality
+    #   and position so that everything can be cycled correctly.
+
+    #   So let's break LED's into segments as a list in cartesian space
+    #   starting at the first LED in the strip (seeing as data is daisy chained)
+
+    #   In my case, the lowest right pixel is the starting pixel.
+    #       So 30 ft, 90 pixels, moving to the left
+    #       Then 5 ft, 15 pixels towards the house
+    #       Then 8 ft, 24 pixels over top of front door, moving left
+    #           dark wire running to the furthest left pixel
+    #       Then 21 ft, 63 pixels moving from left to right
+    #       Then 10 ft, 30 pixels moving away from house
+    #       Then 30 ft, 60 pixels moving up and over topmost peak towards right
+    #           dark wire running from topmost peak on right to recessed peak
+    #       Then 16 ft, 48 pixels moving from righ to left
+    #           End of sequence
+
+    #       45 degree steep peaks move sqrt(2) slower than horizontal LEDs
+    #       Program in speed adustment
+
+    #       Need to map everything to "pixel" cartesian space
+
+    #       In other words, leds across front of garage are 30 ft,
+    #           but this is -90 pixels towards the left, and the topmost 
+    #           peak of house does not fully extend to the 90th pixel 
+    #           nor the 0th pixel of the garage line
+
+    #       Therefore, we could say, the topmost peak runs from pixel
+    #           -70 to -45, at +45 degrees, and -45 to -20 at -45 deg
+    
+    #       Similarly, we could say into or out of the house are at
+    #           -90 or +90 degrees.
+
+    #       So to build this, we could do two arrays at total length of pixels,
+    #           one to denote angle
+    
+
+    # So first strip is 90 pixels, 180 deg, starts at pos 0
+    #   second strip is 15 pixels, 90 deg, starts at pos -90
+    #   third strip is  30 pixels, 180 deg, starts at pos -90
+    #   fourth strip is 90 pixels, 45 deg, ends at pos -90
+    #   fifth strip is 30 pixels, -90 deg, ends at pos -90
+    #   sixth strip is 50 pixels, 45 deg, starts at pos -70
+    #   seventh strip is 50 pixels, -45 deg, starts at pos -45
+    #   eigth strip is 25 pixels, 135 deg, starts at pos -30
+    #   ningth strip is 25 pixels, -135 deg, starts at pos -45
+
+    # break this into strips.....
+    #   Each row is a new strip, with columns
+    #       [#LEDs, angle, strt_x, end_x, start_y, end_y ]
+    ##   Noting that start and end are in LED counts
+    # ANGLE is ALWAYS referenced to start pixel in strip
+
+    strips = [ 
+            [ 90,  180,    0,  -90, None, None ],
+            [ 15,   90,  -90, None, None, None ],
+            [ 30,  180,  -90, None, None, None ],
+            [ 90,   45, None,  -90, None, None ],
+            ]
+
+    # Once I have all my strips loaded, need to fill in None values
+    #   by calculating the end start or end positions based on angles
+
+    for i, strip in enumerate(strips):
+        if strip[2] == None:
+            # This means start position needs to be calculated
+            strips[i][2] = strip[3] - np.cos(strip[1]) * strip[0]
+        if strip[3] == None:
+            strips[i][3] = strip[2] + np.cos(strip[1]) * strip[0]
+
+        if strip[4] == None and strip[5] == None:
+            # This means we don't care about vertical positions
+            strips[i][4] = 0
+            strips[i][5] = 0
+        if strip[4] == None:
+            strips[i][4] = strip[5] - np.sin(strip[1]) * strip[0]
+        if strip[5] == None:
+            strips[i][5] = strip[4] + np.sin(strip[1]) * strip[0]
+
+    #   Next, figure out arrange according to patterns
+    #
+    #   For example, rainbow I will want an option to have everything going
+    #       smoothly from left to right.
+    #
+    #   To do this, I will need to put everything into a pixel matrix
+
+    pixelGrid = []
+    for strip in strips:
+        #For each strip, we start at start pos, (which in my case is 0,0)
+        #   and interpolate across, start_x/y, to end_x/y
+
+        # There ***should*** not be segments that are not straight lines
+        #   if there are, this is edge case, not programming it for now =(
+        for i in range(strip[0]):
+            pixelGrid.append( [ strip[2] + i*strip[3]/strip[0],
+                strip[4] + i*strip[5]/strip[0] ] )
+        # I should now have full cartesian grid of pixels
+
+    # Now let's sort them based on x position:
+    pixelGrid = np.array(pixelGrid)
+
+    # First create a evenly distributed grid from max to min
+    
+    # Some pattern examples,
+    #   Maybe I want lights to radiate away/towards peaks
+    #       I would need to define radiation point (pick the highest peak?)
+    #       if no Y data, should calculate center x value
+
+    #if( max(pixelGrid(1,:]) != min(pixelGrid(1,:])) ):
+    #if( max(pixelGrid[1,:]) == min(pixelGrid(1,:])) ):
+        # This means no y data present
+
+    # Check max of y data, if equal to min of y data, use min_x + (max_x - min_x)/2
+    #   if does have y data from last check, find x value at highest point
+
+    # Another pattern example:
+    #   Everything moves in the same direction
+
+
 if __name__ == "__main__":
-
     # This line is for kicking off the system daemon
     notify.notify("READY=1")
 
+
     # Only do this once at beginning of code
     loc = get_location()
-    
+   
     # Grab sunset information
     # If current time is before sunset, lights are off, otherwise on 
     now = get_timenow(loc)
@@ -232,13 +463,12 @@ if __name__ == "__main__":
     
     # Initialize pixel system
     pixels = neopixel.NeoPixel( PIN, NUM_PIXELS, auto_write = False, pixel_order = ORDER)
-    
-    
+   
+    # Initialize Pixels to OFF
     for i in range(skip):
-        pixels[i] = (0,0,0)
+        pixels[i] = off
     
     oldTimeCheck = time.time()#datetime.datetime.now()
-    timeCheckInterval = 3
     
     oldWxCheck = time.time()
     wx, wxdesc = get_weather(loc)
@@ -251,24 +481,13 @@ if __name__ == "__main__":
     #patternType = "static"#"rolling"
     uniqueColors = [blue, red, green, ww]#, white]#white]#, green]#,blue]
     numUniqueColors = len(uniqueColors)
-    updateDelay = 1#1#0.2
 
     notify.notify("WATCHDOG=1")
     notify.notify("STATUS=Watchdog kicked at {}".format(get_timenow(loc)))
     oldWatchDogCheck = time.time()
-    watchDogInterval = 5
 
+    # Main loop
     while True:
-        # Only ocassionally update current time and sunset time...
-        #if time.time() > oldTimeCheck + timeCheckInterval:
-        #    print("Time is being updated")
-        #    oldTimeCheck = time.time()
-        #    now = get_timenow(loc)
-        #    if datetime.datetime.now().date() > sunset.date():
-        #        sunset = get_sunset(loc)
-   
-        # Enable heartbeat for systemctl
-
         if time.time() > oldWxCheck + wxCheckInterval:
             print("Updating weather data")
             tmp_wx, tmp_wxdesc = get_weather(loc)
@@ -289,162 +508,6 @@ if __name__ == "__main__":
             
             # Set pattern
             pattern = [(0,0,0)]*NUM_PIXELS
-
-            # need to come up with scheme for house orientation.
-            #   For example, my house has LEDs of the form:
-            #
-            #                                   ->
-            #                                 ->  ->
-            #                               ->      ->
-            #                             ->          ->
-            #                           ->      <-      ->
-            #                ->->-> V ->      <-  <-    # ->
-            #             ->          |     <-      <- ##  |
-            #           ->            |     |        |     |    
-            #         ->              |     |        |     |
-            #       ->             ____________________________     
-            #     ->               | ======================== |
-            #   ->                 | ======================== |
-            # -> ######### <-<-<-<-^ ======================== |
-            # |            | _____ ^ ======================== |
-            # |            | |   | <-<-<-<-<-<-<-<-<-<-<-<-<-<-
-            # |            | |   | |                          |                         
-            # |            | |   | |                          |
-            # |            | _____ |                          |
-            # |            |_______|                          |
-            # |                    |                          | 
-            # |                    |                          |
-            #
-            #
-            #   Note the direction of arrows, left right is obvious,
-            #   down arrow is towards the front, carrot is into house
-            #   hash tags are led strips connected by general wiring
-            #   equal signs are roofing shingles over garage leading 
-            #   up to next level
-
-            #   Premise of LEDs, each LED needs to know it's directionality
-            #   and position so that everything can be cycled correctly.
-
-            #   So let's break LED's into segments as a list in cartesian space
-            #   starting at the first LED in the strip (seeing as data is daisy chained)
-
-            #   In my case, the lowest right pixel is the starting pixel.
-            #       So 30 ft, 90 pixels, moving to the left
-            #       Then 5 ft, 15 pixels towards the house
-            #       Then 8 ft, 24 pixels over top of front door, moving left
-            #           dark wire running to the furthest left pixel
-            #       Then 21 ft, 63 pixels moving from left to right
-            #       Then 10 ft, 30 pixels moving away from house
-            #       Then 30 ft, 60 pixels moving up and over topmost peak towards right
-            #           dark wire running from topmost peak on right to recessed peak
-            #       Then 16 ft, 48 pixels moving from righ to left
-            #           End of sequence
-
-            #       45 degree steep peaks move sqrt(2) slower than horizontal LEDs
-            #       Program in speed adustment
-
-            #       Need to map everything to "pixel" cartesian space
-
-            #       In other words, leds across front of garage are 30 ft,
-            #           but this is -90 pixels towards the left, and the topmost 
-            #           peak of house does not fully extend to the 90th pixel 
-            #           nor the 0th pixel of the garage line
-
-            #       Therefore, we could say, the topmost peak runs from pixel
-            #           -70 to -45, at +45 degrees, and -45 to -20 at -45 deg
-            
-            #       Similarly, we could say into or out of the house are at
-            #           -90 or +90 degrees.
-
-            #       So to build this, we could do two arrays at total length of pixels,
-            #           one to denote angle
-            
-
-            # So first strip is 90 pixels, 180 deg, starts at pos 0
-            #   second strip is 15 pixels, 90 deg, starts at pos -90
-            #   third strip is  30 pixels, 180 deg, starts at pos -90
-            #   fourth strip is 90 pixels, 45 deg, ends at pos -90
-            #   fifth strip is 30 pixels, -90 deg, ends at pos -90
-            #   sixth strip is 50 pixels, 45 deg, starts at pos -70
-            #   seventh strip is 50 pixels, -45 deg, starts at pos -45
-            #   eigth strip is 25 pixels, 135 deg, starts at pos -30
-            #   ningth strip is 25 pixels, -135 deg, starts at pos -45
-
-            # break this into strips.....
-            #   Each row is a new strip, with columns
-            #       [#LEDs, angle, strt_x, end_x, start_y, end_y ]
-            ##   Noting that start and end are in LED counts
-            # ANGLE is ALWAYS referenced to start pixel in strip
-
-            strips = [ 
-                    [ 90,  180,    0,  -90, None, None ],
-                    [ 15,   90,  -90, None, None, None ],
-                    [ 30,  180,  -90, None, None, None ],
-                    [ 90,   45, None,  -90, None, None ],
-                    ]
-
-            # Once I have all my strips loaded, need to fill in None values
-            #   by calculating the end start or end positions based on angles
-
-            for i, strip in enumerate(strips):
-                if strip[2] == None:
-                    # This means start position needs to be calculated
-                    strips[i][2] = strip[3] - np.cos(strip[1]) * strip[0]
-                if strip[3] == None:
-                    strips[i][3] = strip[2] + np.cos(strip[1]) * strip[0]
-
-                if strip[4] == None and strip[5] == None:
-                    # This means we don't care about vertical positions
-                    strips[i][4] = 0
-                    strips[i][5] = 0
-                if strip[4] == None:
-                    strips[i][4] = strip[5] - np.sin(strip[1]) * strip[0]
-                if strip[5] == None:
-                    strips[i][5] = strip[4] + np.sin(strip[1]) * strip[0]
-
-            #   Next, figure out arrange according to patterns
-            #
-            #   For example, rainbow I will want an option to have everything going
-            #       smoothly from left to right.
-            #
-            #   To do this, I will need to put everything into a pixel matrix
-
-            pixelGrid = []
-            for strip in strips:
-                #For each strip, we start at start pos, (which in my case is 0,0)
-                #   and interpolate across, start_x/y, to end_x/y
-
-                # There ***should*** not be segments that are not straight lines
-                #   if there are, this is edge case, not programming it for now =(
-                for i in range(strip[0]):
-                    pixelGrid.append( [ strip[2] + i*strip[3]/strip[0],
-                        strip[4] + i*strip[5]/strip[0] ] )
-                # I should now have full cartesian grid of pixels
-
-            # Now let's sort them based on x position:
-            pixelGrid = np.array(pixelGrid)
-
-            # First create a evenly distributed grid from max to min
-            
-            # Some pattern examples,
-            #   Maybe I want lights to radiate away/towards peaks
-            #       I would need to define radiation point (pick the highest peak?)
-            #       if no Y data, should calculate center x value
-
-            #if( max(pixelGrid(1,:]) != min(pixelGrid(1,:])) ):
-            #if( max(pixelGrid[1,:]) == min(pixelGrid(1,:])) ):
-                # This means no y data present
-
-            # Check max of y data, if equal to min of y data, use min_x + (max_x - min_x)/2
-            #   if does have y data from last check, find x value at highest point
-
-            # Another pattern example:
-            #   Everything moves in the same direction
-            
-           
-
-
-
 
            # If numFade = 0, hard changes, otherwise add blending
             numFade = 0#5
@@ -467,29 +530,14 @@ if __name__ == "__main__":
                 uniqueColors = newColorsWithFade
                 numUniqueColors = len(uniqueColors)
 
-            event = 'october'
-            if event == 'october':
-                for i in range(math.floor(skip/numUniqueColors), math.ceil(NUM_PIXELS/numUniqueColors)):
-                    for j, color in enumerate(uniqueColors):
-                        if (i*numUniqueColors + j) < NUM_PIXELS:
-                            pixels[i*numUniqueColors+j] = color
-                    updateDelay = 2#1#1.5
-                    if numFade != 0:
-                        updateDelay = updateDelay / (2*numFade)
-            if event == "pride":
-                for i in range(skip,NUM_PIXELS):
-                    val = i/(NUM_PIXELS/num_rainbows)
-                    while(val > 1.0):
-                        val -= 1.0
-                    (r, g, b) = colorsys.hsv_to_rgb( val , 1.0, 1.0)
-                    if r>=1.0: r = 1
-                    if g>=1.0: g = 1
-                    if b>=1.0: b = 1
-                    pixels[i] = int(255*r), int(255*g), int(255*b)
-                updateDelay = 0.01#5
-        
-            print("Pattern set to ",event)
+            #### GET PATTERN HERE #####
     
+            event = get_event(datetime.date.today())
+            pixels, updateDelay = set_pattern( pixels, event )
+
+            print("Pattern set to ",event)
+   
+        # Can use the following to manually force weather effect
         #wx['t'][0] =  0#1
         #wx['t'][1] =  0#1
    
@@ -574,12 +622,10 @@ if __name__ == "__main__":
                 #print(i,fade)
                 r,g,b = currentPixels[i]
                 pixels[i] = (int(r*fade),int(g*fade),int(b*fade))
-            #pixels.show()
            
             # Sleep will dictate how fast this feature moves
             # If period is, say, 10 pixels, and speed is 5 seconds, we need to roll fades at speed/period
             updateDelay = speed/period
-            #time.sleep(speed/period)
 
 
         # Checking over weather conditions to define style
