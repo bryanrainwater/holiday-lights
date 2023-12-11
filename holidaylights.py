@@ -574,11 +574,12 @@ if __name__ == "__main__":
                 #print(i,fade)
                 r,g,b = currentPixels[i]
                 pixels[i] = (int(r*fade),int(g*fade),int(b*fade))
-            pixels.show()
+            #pixels.show()
            
             # Sleep will dictate how fast this feature moves
             # If period is, say, 10 pixels, and speed is 5 seconds, we need to roll fades at speed/period
-            time.sleep(speed/period)
+            updateDelay = speed/period
+            #time.sleep(speed/period)
 
 
         # Checking over weather conditions to define style
@@ -639,5 +640,5 @@ if __name__ == "__main__":
         sys.stdout.flush()
         
         # If twinkling, remove updateDelay
-        if not twinkling and not slowTwinkle and not sinusoidSweep:
+        if not twinkling and not slowTwinkle:
             time.sleep(updateDelay)#0.05)
