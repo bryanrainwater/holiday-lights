@@ -14,6 +14,46 @@ import sys
 import math
 import sdnotify
 
+
+# Some notes to myself about the features of this shoddily written program...
+
+# Started as a way to put some neat WS2811 LEDs on the house....
+#   ultimately, kept getting hacked and changed way too quickly to get to other more urgent projects
+
+# Soooo, bits and pieces of this code essentially do several main things:
+#   1) Accesses the internet for IP based geolocation, date, sunrise/sunset, and weather data.
+#       *) Sunrise/Sunset makes sense for saving power on lights.
+#       *) Weather data was supposed to be neat effects like blowing wind, twinkling orange for fall, spurious flashes for thunderstorms
+#           Lots of pieces are there, just haven't fully hashed out because S.O. and myself decided upon patterns we liked most
+#       *) Date data was originally supposed to inform patterns such as the following:
+#           October: purples and oranges, cycling about
+#           Halloween day: Same as october but with random startling flashes for passerby's
+#           November: Oranges and yellows and like falling leaves, gently fades/brightens LEDs 
+#           December: Yellow, blue, red, greens
+#           Feburary: Pinks and Reds
+#           New Year: Randomized spurts outwards of specific colors (like fireworks)
+#           4th of July: Red Whites and Blues
+#           Diwali: All yellows (like candles) with flickering
+#           Pride Month: Make house look like an RGB gaming computer, rainbow cycling.
+#           
+#   2) Longer term goal would be to build a cohesive pattern and cycling system that operates ontop of the patterns:
+#       Weather: See above discussion
+#       Rolling: LED pattern simply moves according to speed chosen
+#       Twinkling: Randomized dimming/brightening of LEDs
+#       Fading: LEDs dim and brighten all at once
+#       Sinusoid: Rolling mask to the pattern (i.e. 
+#
+#   3) Final pipe dream was to build a function for mapping pixels on house to a cartesian pixel grid for
+#       for moving things spatially consistently, framed the logic for this, just haven't pursued further.
+
+
+# Ultimately a lot of this is still hardcoded but I am working on getting to this as time permits outside of 
+#   job, home renos, and slowwwlllyyy building up a pet company (SimplyFloof) and an environmental instrumentation company (Environmentation)
+# Planning to play around with this late winter/spring when thematic styles can be more fluid.
+
+# Please reach out to me if you have questions or requests, always happy to hop back in when time permits
+
+
 # Watchdog timer
 notify = sdnotify.SystemdNotifier()
 
@@ -44,8 +84,6 @@ cw = (255,255,255)#, 0, 100)
 #ww = (255,255,80)
 ww = (255, 90, 0)
 
-
-rando = (255,255,0)
 
 # Personal API key python file config.py
 #   of form api_key = "bleh"
@@ -506,7 +544,7 @@ if __name__ == "__main__":
                 pixels.show()
                 time.sleep(twinkleInterval)
 
-        slowTwinkle = True
+        slowTwinkle = False #True
         if slowTwinkle:
 
             twinkleFadeSteps = 30
@@ -543,6 +581,42 @@ if __name__ == "__main__":
                 pixels.show()
                 time.sleep(twinkleInterval)
 
+        # Sinusoidal fade mask:
+        sinusoidSweep = True
+        if sinusoidSweep:
+            period = 40 # number of pixels for sinunsoid to repeat
+            speed = 2 # Time between peak to fade and unfade back to peak intensity
+            fadeMin = 0.1 # value between 0 and 1 that dicates dimmest that it will go (1 is no dimming)
+
+
+            # Goofy way of doing this but attempt roll of fade first, otherwise we know it hasn't been established
+            try:
+                fadeMask = np.roll(fadeMask,1)
+            except:
+                # Define fade mask, i.e., the percentage to scale original values by
+                # Start with 0 to 1
+
+                fadeMask = np.zeros(NUM_PIXELS)
+                for i,fade in enumerate(fadeMask):
+                    fadeMask[i] = 0.5 + 0.5*np.sin(2*np.pi*i/period)
+
+                # Now scale according to fademin 
+                fadeMask = fadeMask * (1 - fadeMin) + fadeMin
+                currentPixels = pixels[:]
+
+            # Roll on the fademask is going to be dependent on delay and speed
+            for i,fade in enumerate(fadeMask):
+                #print(i,fade)
+                r,g,b = currentPixels[i]
+                pixels[i] = (int(r*fade),int(g*fade),int(b*fade))
+            pixels.show()
+           
+            #print("made it to end of fadeMask routine")
+
+            # Sleep will dictate how fast this feature moves
+            # If period is, say, 10 pixels, and speed is 5 seconds, we need to roll fades at speed/period
+            time.sleep(speed/period)
+
 
         # Checking over weather conditions to define style
         #if wx['t'][0] > 0 and time.time() > nextFlash:
@@ -574,8 +648,8 @@ if __name__ == "__main__":
             nextFlash = time.time() + flashDelay
     
         # This will simply roll by one value everytime
-        currentPixels = pixels[:]
-        currentPixels = currentPixels[skip:]
+        #currentPixels = pixels[:]
+        #currentPixels = currentPixels[skip:]
    
         static=True
         if not static:
@@ -616,5 +690,5 @@ if __name__ == "__main__":
         sys.stdout.flush()
         
         # If twinkling, remove updateDelay
-        if not twinkling and not slowTwinkle:
+        if not twinkling and not slowTwinkle and not sinusoidSweep:
             time.sleep(updateDelay)#0.05)
