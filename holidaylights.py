@@ -62,28 +62,42 @@ sunsetCheck = True
 
 # In minutes
 #   Can be used to account for mountains and whatnot
+# i.e. if -50, means start up lights 50 minutes before sunset
 sunsetShift = -51#-300
 
+# UNAPPLIED
+minsPastMidnight = 0
+# UNAPPLIED
+runUntilSunrise = False
+
+# LED WS2811 configurations for Raspberry Pi
 PIN = board.D18
-NUM_PIXELS=500#400#300#200
+NUM_PIXELS=500 #This number can be much greater than the number of pixels if you don't want to count
 ORDER = neopixel.RGB
-    
+   
+# Set upper limit to brightness
 max_bright = 255
-    
-color1 = (0, 0, 0)
-color2 = (max_bright, max_bright, max_bright)
+   
+   
+off = (0, 0, 0)
+on = (max_bright, max_bright, max_bright)
 red = (max_bright, 0, 0)
 green = (0, max_bright, 0)
 blue = (0, 0, max_bright)
-    
-orange = (255, 20, 0)
-yellow = (255, 90, 0)
-purple = (255, 0, 100)
-white = (255,255,255)#, 0, 100)
-cw = (255,255,255)#, 0, 100)
+orange = (max_bright, 20, 0)
+yellow = (max_bright, int(90*max_bright/255), 0)
+purple = (max_bright, 0, int(100*max_bright/255))
+white = (max_bright, max_bright, max_bright)
+cw = (max_bright, max_bright, max_bright)
 #ww = (255,255,80)
-ww = (255, 90, 0)
+ww = (max_bright, int(90*max_bright/255), 0)
 
+# Assorted Variables
+#iterator = 0
+num_rainbows = 16# 4#3
+skip = 0#100
+pattern = None
+patternType = "rolling"
 
 # Personal API key python file config.py
 #   of form api_key = "bleh"
@@ -113,7 +127,6 @@ def get_weather(loc):
     lon = loc.get("longitude")
     url = "https://api.openweathermap.org/data/2.5/weather?lat=%s&lon=%s&appid=%s&units=metric" % (lat, lon, config.api_key)
    
-
     try:
         response = requests.get(url)
         data = json.loads(response.text)
@@ -192,18 +205,11 @@ def get_weather(loc):
     return wx, desc
 
 def get_event(date = None):
-    # Events and effects:
-    #   Christmas/December colors r,g,b,w
-    #   October colors orange, purple, mayyybbbeee green
-    #   November colors, orange, white, yellow
+    # Events and effects: See comments at top of code
+    # Basically, if month = 12, event = Dec
 
-    #   Pride month: rainbow cycling
-    #   Fourth of July: Red, White, and Blue, static
-    #   Election day: election results api, hue from red to blue dependent
-    #       Periodically cycles to random chaotic flashing.
-    #       Likely needs to persist for a week or two because fucking Nevada
-    #
     print("Get event")
+
 
 def set_pattern( event ):
     # setting pattern based on event
@@ -213,23 +219,20 @@ def set_pattern( event ):
 # Begin crude code
 if __name__ == "__main__":
 
+    # This line is for kicking off the system daemon
     notify.notify("READY=1")
 
     # Only do this once at beginning of code
     loc = get_location()
     
     # Grab sunset information
-    # If current time is before sunset, lights are off, otherwise on
-    
+    # If current time is before sunset, lights are off, otherwise on 
     now = get_timenow(loc)
     sunset = get_sunset(loc)
     
+    # Initialize pixel system
     pixels = neopixel.NeoPixel( PIN, NUM_PIXELS, auto_write = False, pixel_order = ORDER)
     
-    #iterator = 0
-    num_rainbows = 16# 4#3
-    skip = 0#100
-    pattern = None
     
     for i in range(skip):
         pixels[i] = (0,0,0)
@@ -246,13 +249,7 @@ if __name__ == "__main__":
     nextFlash = time.time()
     
     #patternType = "static"#"rolling"
-    patternType = "rolling"
-    #uniqueColors = [orange,orange, purple]#,blue]
-    #uniqueColors = [orange,yellow]#,blue]
-    #uniqueColors = [white,yellow]#,blue]
-    #uniqueColors = [blue, red, green, white]#white]#, green]#,blue]
     uniqueColors = [blue, red, green, ww]#, white]#white]#, green]#,blue]
-    #uniqueColors = [rando,rando]#,blue]
     numUniqueColors = len(uniqueColors)
     updateDelay = 1#1#0.2
 
@@ -282,32 +279,16 @@ if __name__ == "__main__":
             print("Weather is ", wxdesc)
    
         if time.time() > oldWatchDogCheck + watchDogInterval:
-            #print("Kicking WATCHDOG")
-            #notify.status("WATCHDOG=1")
-            #notify.notify("STATUS=Watchdog kicked at {}".format(time.time()) )
             notify.notify("WATCHDOG=1")
             notify.notify("STATUS=Watchdog kicked at {}".format(get_timenow(loc)))
-            #notify("WATCHDOG=1")
             oldWatchDogCheck = time.time()
        
         if( sunset.date() < get_timenow(loc).date() or pattern is None):
             print("Moved onto new day, recalculating sunset time")
             sunset = get_sunset(loc)
-            #print("Also recalculating what event it is")
-            #event = get_event()
             
-            print("Also recalculating pattern")
-    
             # Set pattern
             pattern = [(0,0,0)]*NUM_PIXELS
-
-            #if event == 'october':
-            #if event == 'halloween':
-            #if event == 'november':
-            #if event == 'december':
-            #if event == 'christmas':
-            #if event == 
-
 
             # need to come up with scheme for house orientation.
             #   For example, my house has LEDs of the form:
@@ -430,26 +411,20 @@ if __name__ == "__main__":
 
             pixelGrid = []
             for strip in strips:
-                #pixelGrid.append([ x, y ])
-                
                 #For each strip, we start at start pos, (which in my case is 0,0)
                 #   and interpolate across, start_x/y, to end_x/y
 
                 # There ***should*** not be segments that are not straight lines
                 #   if there are, this is edge case, not programming it for now =(
-
                 for i in range(strip[0]):
                     pixelGrid.append( [ strip[2] + i*strip[3]/strip[0],
                         strip[4] + i*strip[5]/strip[0] ] )
-
                 # I should now have full cartesian grid of pixels
-
 
             # Now let's sort them based on x position:
             pixelGrid = np.array(pixelGrid)
 
             # First create a evenly distributed grid from max to min
-
             
             # Some pattern examples,
             #   Maybe I want lights to radiate away/towards peaks
@@ -463,23 +438,23 @@ if __name__ == "__main__":
             # Check max of y data, if equal to min of y data, use min_x + (max_x - min_x)/2
             #   if does have y data from last check, find x value at highest point
 
-            
             # Another pattern example:
             #   Everything moves in the same direction
-
             
-            # If numFade = 0, hard changes, otherwise add blending
+           
+
+
+
+
+           # If numFade = 0, hard changes, otherwise add blending
             numFade = 0#5
 
             newColorsWithFade = []
             if numFade != 0:
                 for i in range(numUniqueColors):#-1):
-                    #if uniqueColors[i] == uniqueColors[i+1]:
                     if uniqueColors[i] == uniqueColors[i-1]:
-                        #newColorsWithFade.append(uniqueColors[i])
                         newColorsWithFade.append(uniqueColors[i-1])
                     else:
-                        #print(uniqueColors[i], uniqueColors[i+1])
                         colorStep = tuple(int(color/numFade) for color in uniqueColors[i-1])
                         for j in range(numFade):
                             newColorsWithFade.append(
@@ -493,7 +468,6 @@ if __name__ == "__main__":
                 numUniqueColors = len(uniqueColors)
 
             event = 'october'
-            #event = 'pride'#'october'
             if event == 'october':
                 for i in range(math.floor(skip/numUniqueColors), math.ceil(NUM_PIXELS/numUniqueColors)):
                     for j, color in enumerate(uniqueColors):
@@ -519,13 +493,9 @@ if __name__ == "__main__":
         #wx['t'][0] =  0#1
         #wx['t'][1] =  0#1
    
-        # Add twinkle effect:
-
-        #if 1==1:
         # Check duration of wait time to figure out how many twinkles
-        twinkling = False#True#False
+        twinkling = False
         if twinkling:
-
             twinkleInterval = 0.05
             twinkleIntensity = 1.3
 
@@ -544,14 +514,11 @@ if __name__ == "__main__":
                 pixels.show()
                 time.sleep(twinkleInterval)
 
-        slowTwinkle = False #True
+        slowTwinkle = False
         if slowTwinkle:
-
             twinkleFadeSteps = 30
             twinkleDivision = 1.08
-
             twinklesPerInterval = 1
-            #twinkleInterval = 0.05
             twinkleInterval = updateDelay/(twinkleFadeSteps*2)
 
             # Find out what the new values need to be to make them integer arithmetic compatible
@@ -588,14 +555,12 @@ if __name__ == "__main__":
             speed = 2 # Time between peak to fade and unfade back to peak intensity
             fadeMin = 0.1 # value between 0 and 1 that dicates dimmest that it will go (1 is no dimming)
 
-
             # Goofy way of doing this but attempt roll of fade first, otherwise we know it hasn't been established
             try:
                 fadeMask = np.roll(fadeMask,1)
             except:
                 # Define fade mask, i.e., the percentage to scale original values by
                 # Start with 0 to 1
-
                 fadeMask = np.zeros(NUM_PIXELS)
                 for i,fade in enumerate(fadeMask):
                     fadeMask[i] = 0.5 + 0.5*np.sin(2*np.pi*i/period)
@@ -611,8 +576,6 @@ if __name__ == "__main__":
                 pixels[i] = (int(r*fade),int(g*fade),int(b*fade))
             pixels.show()
            
-            #print("made it to end of fadeMask routine")
-
             # Sleep will dictate how fast this feature moves
             # If period is, say, 10 pixels, and speed is 5 seconds, we need to roll fades at speed/period
             time.sleep(speed/period)
@@ -638,7 +601,7 @@ if __name__ == "__main__":
             currentPixels = pixels[:]
             
             for i in range(flashStart, flashStart+sizeOfFlash):
-                pixels[i] = (255,255,255)
+                pixels[i] = on#(255,255,255)
             pixels.show()
             time.sleep(0.05)
     
@@ -647,12 +610,12 @@ if __name__ == "__main__":
             
             nextFlash = time.time() + flashDelay
     
-        # This will simply roll by one value everytime
-        #currentPixels = pixels[:]
-        #currentPixels = currentPixels[skip:]
    
         static=True
         if not static:
+            # This will simply roll by one value everytime
+            currentPixels = pixels[:]
+            currentPixels = currentPixels[skip:]
             currentPixels = np.roll(currentPixels,3)
             for i in range(skip,NUM_PIXELS):
                 pixels[i] = currentPixels[i-skip]
@@ -660,31 +623,17 @@ if __name__ == "__main__":
         # Final check to see if before sunset
         #   if before sunset, calculate wait until sunset and wait
         #   if after sunset, wait until date rolls over.
-        #print(sunset, sunset + datetime.timedelta(minutes = -50 ) )
         if( sunsetCheck and sunset > get_timenow(loc) ) :
-            
             secondsUntilSunset = (sunset - get_timenow(loc)).seconds
             print("Beginning wait. Number of seconds until sunset: ", (sunset - get_timenow(loc)).seconds)
             # Turning off pixels
             for i in range(NUM_PIXELS):
                 pixels[i] = (0,0,0)
-            #pixels.show()
-            # Waiting a few minutes, check again
-            #   I could wait until sunset, butttt, nice to
-            #   see code is still churning in systemctl
-            #updateDelay = (sunset - get_timenow(loc)).seconds
-            #if 900 > secondsUntilSunset: 
-            #    updateDelay = secondsUntilSunset
-            #else:
-            #    updateDelay = 900
-            #sys.stdout.flush()
             updateDelay = 5
-            #time.sleep(5)#0.05)
             
             if ( secondsUntilSunset < 30 ):#sunset < get_timenow(loc) ):
                 # Set pattern to None to encourage recheck of pattern
                 pattern = None
-
 
         pixels.show()
         sys.stdout.flush()
