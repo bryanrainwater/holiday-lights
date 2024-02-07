@@ -57,7 +57,6 @@ import sdnotify
 # Watchdog timer
 notify = sdnotify.SystemdNotifier()
 
-
 sunsetCheck = True
 
 # In minutes
@@ -82,12 +81,13 @@ ORDER = neopixel.RGB
 # Set upper limit to brightness
 max_bright = 255
    
-   
 off = (0, 0, 0)
 on = (max_bright, max_bright, max_bright)
 red = (max_bright, 0, 0)
 green = (0, max_bright, 0)
 blue = (0, 0, max_bright)
+#pink = (max_bright,int(20*max_bright/255),int(147*max_bright/255))
+pink = (max_bright,int(20*max_bright/255),int(60*max_bright/255))
 orange = (max_bright, 20, 0)
 yellow = (max_bright, int(90*max_bright/255), 0)
 purple = (max_bright, 0, int(100*max_bright/255))
@@ -102,7 +102,8 @@ num_rainbows = 16# 4#3
 skip = 0#100
 pattern = None
 patternType = "rolling"
-    
+
+
 
 # Personal API key python file config.py
 #   of form api_key = "bleh"
@@ -113,8 +114,9 @@ def get_ip():
 
 def get_location():
     ip_address = get_ip()
-    response = requests.get(f'https://ipapi.co/{ip_address}/json/').json()
-    return response
+    # response = requests.get(f'https://ipapi.co/{ip_address}/json/').json()
+    response = requests.get(f'https://api.ipapi.is/?q={ip_address}').json()
+    return response.get('location')
 
 def get_sunset(loc):
     city = astral.LocationInfo(loc.get("city"),loc.get("region"),loc.get("timezone"),loc.get("latitude"), loc.get("longitude"))
@@ -126,10 +128,13 @@ def get_sunset(loc):
 
 def get_timenow(loc):
     return datetime.datetime.now(pytz.timezone(loc.get('timezone')))
+    # return datetime.datetime.now(pytz.timezone(loc.get('location').get('timezone')))
 
 def get_weather(loc):
     lat = loc.get("latitude")
     lon = loc.get("longitude")
+    # lat = loc.get("location").get("latitude")
+    # lon = loc.get("location").get("longitude")
     url = "https://api.openweathermap.org/data/2.5/weather?lat=%s&lon=%s&appid=%s&units=metric" % (lat, lon, config.api_key)
    
     try:
@@ -236,10 +241,11 @@ def get_event(date = None):
         if day == 1:
             event = 'newyear'
     elif month == 2:
-        if day == 14:
-            event = 'valentines'
-        else:
-            event = 'february'
+        event = 'february'
+        # if day == 14:
+        #    event = 'valentines'
+        #else:
+        #    event = 'february'
     elif month == 3:
         if day == 17:
             event = 'stpatricksday'
@@ -260,7 +266,6 @@ def get_event(date = None):
     #   diwali (darkest day of November?
     #   memorial day last monday of may (do all red)
     #   labor day (floating monday sep 1-7, red/white/blue)
-    #   
     
     return event
 
@@ -270,6 +275,9 @@ def set_pattern( pixels, event ):
     
     if event == 'december':
         uniqueColors = [blue, red, green, ww]#, white]#white]#, green]#,blue]
+
+    if event == "february":
+        uniqueColors = [pink]
 
     for i in range(math.floor(skip/numUniqueColors), math.ceil(NUM_PIXELS/numUniqueColors)):
         for j, color in enumerate(uniqueColors):
@@ -289,6 +297,8 @@ def set_pattern( pixels, event ):
             if b>=1.0: b = 1
             pixels[i] = int(255*r), int(255*g), int(255*b)
         updateDelay = 0.01#5
+
+
     print("Pattern is set")
 
     return pixels, updateDelay 
@@ -630,6 +640,8 @@ if __name__ == "__main__":
 
         # Checking over weather conditions to define style
         #if wx['t'][0] > 0 and time.time() > nextFlash:
+        
+        # FLASHING should be handled during the delays, need to move down to the bottom at some point
         if 1==0 and time.time() > nextFlash:
             # This means thunderstorm is occurring
             #   Check intensity and flash accordingly
